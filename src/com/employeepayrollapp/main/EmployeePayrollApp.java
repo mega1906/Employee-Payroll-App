@@ -1,12 +1,14 @@
 package com.employeepayrollapp.main;
 
 import com.employeepayrollapp.exception.ValidationException;
+import com.employeepayrollapp.model.DownloadToken;
 import com.employeepayrollapp.model.Employee;
 import com.employeepayrollapp.model.Payslip;
 import com.employeepayrollapp.model.RegularEmployee;
 import com.employeepayrollapp.model.Session;
 import com.employeepayrollapp.model.UserAccount;
 import com.employeepayrollapp.service.AuthenticationService;
+import com.employeepayrollapp.service.FileService;
 import com.employeepayrollapp.service.PayrollService;
 import com.employeepayrollapp.validation.Validator;
 
@@ -19,7 +21,7 @@ import java.util.Scanner;
  * Main runner class for the application.
  * Features an interactive loop and advanced switch routing for menus.
  * @author Developer
- * @version 3.0
+ * @version 4.0
  */
 public class EmployeePayrollApp {
 
@@ -29,11 +31,14 @@ public class EmployeePayrollApp {
      */
     public static void main(String[] args) {
         Scanner sc = new Scanner(System.in);
+        
+        // Ensure the data directory exists before executing file I/O operations
         new File("data").mkdirs();
         
         AuthenticationService authService = new AuthenticationService();
         boolean running = true;
         
+        // Main infinite loop for continuous app execution
         while (running) {
             System.out.println("\n=== EMPLOYEE PAYROLL SYSTEM ===");
             System.out.println("1. Register New Employee");
@@ -43,6 +48,7 @@ public class EmployeePayrollApp {
             
             String choice = sc.nextLine();
             
+            // Advanced Switch for clean top-level menu routing
             switch (choice) {
                 case "1" -> handleRegistration(sc, authService);
                 case "2" -> handleLogin(sc, authService);
@@ -64,6 +70,7 @@ public class EmployeePayrollApp {
     private static void handleRegistration(Scanner sc, AuthenticationService authService) {
         System.out.println("\n=== EMPLOYEE REGISTRATION ===");
         try {
+            // Collect and immediately validate each piece of data
             System.out.print("Enter Employee ID (EMP-XXXX): ");
             String empId = sc.nextLine();
             Validator.validateEmpId(empId);
@@ -85,10 +92,14 @@ public class EmployeePayrollApp {
             System.out.print("Create Password: ");
             String password = sc.nextLine();
 
+            // Construct objects using validated inputs
             UserAccount account = new UserAccount(username, password);
             Employee employee = new Employee(empId, name, email, phone, account);
+            
+            // Persist the entity to file
             employee.persist();
 
+            // Store credentials dynamically for Use Case 2
             authService.registerUser(new RegularEmployee(username, password));
 
             System.out.println("\nEmployee Registered Successfully.");
@@ -106,17 +117,20 @@ public class EmployeePayrollApp {
      * @param authService The authentication service
      */
     private static void handleLogin(Scanner sc, AuthenticationService authService) {
+        // Authenticate the user and generate a session
         Session session = authService.login(sc);
         
         if (session == null) {
-            return;
+            return; // Exit if login completely fails
         }
 
         boolean loggedIn = true;
         
+        // Loop the dashboard until the user logs out or session expires
         while (loggedIn && !session.isExpired()) {
             System.out.println("\n======= " + session.getRole() + " DASHBOARD =======");
             
+            // Display distinct menus depending on the active role
             switch (session.getRole()) {
                 case "MANAGER" -> {
                     System.out.println("1. Approve Payroll");
@@ -124,7 +138,7 @@ public class EmployeePayrollApp {
                     System.out.println("3. Log Out");
                 }
                 case "EMPLOYEE" -> {
-                    System.out.println("1. Generate Payslip");
+                    System.out.println("1. Generate & Download Payslip");
                     System.out.println("2. Update Profile");
                     System.out.println("3. Log Out");
                 }
@@ -133,6 +147,7 @@ public class EmployeePayrollApp {
             System.out.print("Select an option: ");
             String choice = sc.nextLine();
             
+            // Route the selection safely based on role
             switch (session.getRole()) {
                 case "MANAGER" -> {
                     switch (choice) {
@@ -170,6 +185,7 @@ public class EmployeePayrollApp {
     private static void handlePayslipGeneration(Scanner sc) {
         System.out.println("\n=== PAYSLIP GENERATION ===");
         try {
+            // Collect gross breakdown
             System.out.print("Enter Employee ID: ");
             String empId = sc.nextLine();
             
@@ -191,14 +207,64 @@ public class EmployeePayrollApp {
             System.out.print("Enter Allowances: ");
             double allowances = Double.parseDouble(sc.nextLine());
 
+            // Build dependencies and process payroll calculations
             Employee emp = new Employee(empId, name);
             PayrollService payrollService = new PayrollService();
             
-            Payslip payslip = payrollService.generatePayslip(emp, month, basic, hra, da, allowances);
-            System.out.println(payslip);
+            Payslip originalPayslip = payrollService.generatePayslip(emp, month, basic, hra, da, allowances);
+            System.out.println(originalPayslip);
+
+            // Trigger the download flow explicitly requested in Use Case 4
+            System.out.print("Would you like to download this payslip? (Y/N): ");
+            String downloadChoice = sc.nextLine();
+            
+            if (downloadChoice.equalsIgnoreCase("Y")) {
+                handlePayslipDownload(originalPayslip);
+            }
 
         } catch (NumberFormatException e) {
             System.out.println("\nInput Error: Please enter valid numeric values for salary components.");
+        }
+    }
+
+    /**
+     * Handles the safe cloning and file persistence of a generated payslip.
+     * @param original The original generated payslip
+     */
+    private static void handlePayslipDownload(Payslip original) {
+        System.out.println("\n=== PAYSLIP DOWNLOAD ===");
+        
+        // Ensure the token hasn't timed out before proceeding
+        DownloadToken token = new DownloadToken();
+        if (token.isExpired()) {
+            System.out.println("Download token expired. Please generate the payslip again.");
+            return;
+        }
+
+        // Generate a disconnected, read-only copy of the payslip
+        Payslip clonedPayslip = (Payslip) original.clone();
+        
+        // Prove that cloning creates a separate instance containing identical values
+        System.out.println("Verified: Download copy is equal to original: " + clonedPayslip.equals(original));
+        System.out.println("Original hashcode : " + original.hashCode());
+        System.out.println("Cloned hashcode   : " + clonedPayslip.hashCode());
+        
+        try {
+            // Export the detached clone safely into independent files
+            FileService fileService = new FileService();
+            String txtFile = fileService.savePayslipAsText(clonedPayslip);
+            String pdfFile = fileService.savePayslipAsPdf(clonedPayslip);
+            
+            System.out.println("\nPayslip Download Successful.");
+            System.out.println("Saved as text file: " + txtFile);
+            System.out.println("Saved as PDF file : " + pdfFile);
+
+            // Display the final output verification requested in the requirements
+            System.out.println("\n--- Printed payslip ---");
+            System.out.println(clonedPayslip);
+
+        } catch (IOException e) {
+            System.out.println("Error saving payslip files: " + e.getMessage());
         }
     }
 }
