@@ -5,12 +5,11 @@ import java.io.IOException;
 
 /**
  * Employee
- * Represents an employee entity with encapsulated private data.
+ * Represents an Employee entity demonstrating encapsulation and controlled state.
  * @author Developer
- * @version 1.0
+ * @version 2.0
  */
 public class Employee {
-
     private String empId;
     private String name;
     private String email;
@@ -18,12 +17,12 @@ public class Employee {
     private UserAccount account;
 
     /**
-     * Constructs a fully initialized Employee object.
-     * @param empId Unique identifier for the employee
-     * @param name Full name of the employee
-     * @param email Validated email address
-     * @param phone Validated phone number
-     * @param account UserAccount associated with this employee
+     * Initializes a complete employee object.
+     * @param empId The unique identifier
+     * @param name The full name
+     * @param email The validated email
+     * @param phone The validated phone number
+     * @param account The associated user account
      */
     public Employee(String empId, String name, String email, String phone, UserAccount account) {
         this.empId = empId;
@@ -34,21 +33,43 @@ public class Employee {
     }
 
     /**
-     * Formats employee details as a string.
-     * @return Formatted string containing employee details
+     * Initializes a basic employee profile for payroll processing.
+     * @param empId The unique identifier
+     * @param name The full name
      */
+    public Employee(String empId, String name) {
+        this.empId = empId;
+        this.name = name;
+    }
+
+    /**
+     * Retrieves the employee ID.
+     * @return The employee ID string
+     */
+    public String getEmpId() {
+        return empId;
+    }
+
+    /**
+     * Retrieves the employee name.
+     * @return The employee name string
+     */
+    public String getName() {
+        return name;
+    }
+
     @Override
     public String toString() {
         return "Employee ID : " + empId + "\n" +
                "Name        : " + name + "\n" +
                "Email       : " + email + "\n" +
                "Phone       : " + phone + "\n" +
-               "Username    : " + account.getUsername();
+               "Username    : " + (account != null ? account.getUsername() : "N/A");
     }
 
     /**
-     * Saves employee data to a file.
-     * @throws IOException If file writing fails
+     * Saves employee data into a file.
+     * @throws IOException if an error occurs during file operations
      */
     public void persist() throws IOException {
         try (FileWriter fw = new FileWriter("data/employee_data.txt", true)) {
