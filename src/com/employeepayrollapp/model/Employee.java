@@ -19,10 +19,10 @@ public class Employee {
 
     /**
      * Constructs a fully initialized Employee object.
-     * @param empId   Unique identifier for the employee
-     * @param name    Full name of the employee
-     * @param email   Validated email address
-     * @param phone   Validated phone number
+     * @param empId Unique identifier for the employee
+     * @param name Full name of the employee
+     * @param email Validated email address
+     * @param phone Validated phone number
      * @param account UserAccount associated with this employee
      */
     public Employee(String empId, String name, String email, String phone, UserAccount account) {
